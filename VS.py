@@ -44,6 +44,7 @@ def get_image(fname, show=False):
 
     return img
 
+# add comm
 
 def process_file(file_name, start_index=0):
     products = []
