@@ -1,10 +1,11 @@
-import os
-import json
 import gzip
-import pandas as pd
+import json
 from urllib.request import urlopen
 
-### load the metadata
+import pandas as pd
+
+
+# load the metadata
 def load_cdl_data():
     data = []
     link = 'http://deepyeti.ucsd.edu/jianmo/amazon/metaFiles/meta_AMAZON_FASHION.json.gz'
@@ -22,6 +23,11 @@ def load_cdl_data():
 
     return df
 
-if __name__ == '__main__':
+
+def main():
     data = load_cdl_data()
     print(len(data))
+
+
+if __name__ == '__main__':
+    main()
