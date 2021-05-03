@@ -1,23 +1,22 @@
-import numpy as np
 import logging
-from keras.layers import Input, Embedding, Dot, Flatten, Dense, Dropout, Lambda, Add
+
+import numpy as np
+from keras.layers import Input, Embedding, Dot, Flatten, Dense, Dropout, Add
 from keras.layers.noise import GaussianNoise
-from tensorflow.keras.initializers import RandomUniform, RandomNormal
 from keras.models import Model
 from keras.regularizers import l2
-from keras import optimizers
-from keras import backend as K
-from keras.engine.topology import Layer
+from tensorflow.keras.initializers import RandomNormal
 
 
 class CollaborativeDeepLearning:
-    def __init__(self, item_mat, hidden_layers):
+    def __init__(self, item_mat, hidden_layers, item_dict):
         """
         hidden_layers = a list of three integer indicating the embedding dimension of autoencoder
         item_mat = item feature matrix with shape (# of item, # of item features)
         """
         assert (len(hidden_layers) == 3)
         self.item_mat = item_mat
+        self.item_dict = item_dict
         self.hidden_layers = hidden_layers
         self.item_dim = hidden_layers[0]
         self.embedding_dim = hidden_layers[-1]
@@ -40,6 +39,8 @@ class CollaborativeDeepLearning:
             decoder = Dense(input_dim, activation=activation, kernel_regularizer=l2(lamda_w),
                             bias_regularizer=l2(lamda_w))(encoder)
             # autoencoder
+
+            # enc_chkpoint = ModelCheckpoint(filepath="featurizer_checkpoints")
             ae = Model(inputs=pretrain_input, outputs=decoder)
             # encoder
             ae_encoder = Model(inputs=pretrain_input, outputs=encoder)
@@ -49,18 +50,19 @@ class CollaborativeDeepLearning:
             ae_decoder = Model(encoded_input, decoder_layer(encoded_input))
 
             ae.compile(loss='mse', optimizer='rmsprop')
-            ae.fit(X_train, X_train, batch_size=batch_size, epochs=epochs, verbose=2)
+            ae.fit(X_train, X_train, batch_size=batch_size, epochs=epochs, verbose=2)  # , callbacks=[enc_chkpoint])
 
             self.trained_encoders.append(ae_encoder)
             self.trained_decoders.append(ae_decoder)
             X_train = ae_encoder.predict(X_train)
 
-    def fineture(self, train_mat, test_mat, lamda_u=0.1, lamda_v=0.1, lamda_n=0.1, lr=0.001, batch_size=64, epochs=10):
+    def fineture(self, train_mat, test_mat, lamda_u=0.1, lamda_v=0.1, lamda_n=0.1, lr=0.001,
+                 batch_size=64, epochs=10):
         '''
         Fine-tuning with rating prediction
         '''
-        num_user = int(max(train_mat[:, 0].max(), test_mat[:, 0].max()) + 1)
-        num_item = int(max(train_mat[:, 1].max(), test_mat[:, 1].max()) + 1)
+        num_user = int(max(train_mat["reviewer_id"].max(), test_mat["reviewer_id"].max()) + 1)
+        num_item = int(max(train_mat["item_id"].max(), test_mat["item_id"].max()) + 1)
 
         # item autoencoder
         itemfeat_InputLayer = Input(shape=(self.item_dim,), name='item_feat_input')
@@ -96,16 +98,18 @@ class CollaborativeDeepLearning:
 
         model_history = self.cdl_model.fit([train_user, train_item, train_item_feat], [train_label, train_item_feat],
                                            epochs=epochs, batch_size=batch_size, validation_data=(
-            [test_user, test_item, test_item_feat], [test_label, test_item_feat]))
+                [test_user, test_item, test_item_feat], [test_label, test_item_feat]))
         return model_history
 
-
     def matrix2input(self, rating_mat):
-        train_user = rating_mat[:, 0].reshape(-1, 1).astype(int)
-        train_item = rating_mat[:, 1].reshape(-1, 1).astype(int)
-        train_label = rating_mat[:, 2].reshape(-1, 1)
-        train_item_feat = [self.item_mat[train_item[x]][0] for x in range(train_item.shape[0])]
-        return train_user, train_item, np.array(train_item_feat), train_label
+        train_user = rating_mat[["reviewer_id"]]
+        asins = rating_mat["asin"].tolist()
+        train_item = rating_mat[["item_id"]]
+        train_item_feat = [np.array(self.item_dict.get(asins[x])) for x in range(len(asins))]
+        train_item_feat = [[0 for _ in range(4096)] if x is None else x for x in train_item_feat]
+        train_item_feat = np.array([np.array([0 for _ in range(4096)]) for _ in range(len(asins))])
+        train_label = np.array(rating_mat["rating"].values.tolist())
+        return train_user, train_item, train_item_feat, train_label
 
     def build(self, train_mat, test_mat, lamda_u=0.1, lamda_v=0.1, lamda_n=0.1, lr=0.001, batch_size=64, epochs=10):
         # rating prediction
@@ -145,6 +149,7 @@ class CollaborativeDeepLearning:
         pred_out = self.cdl_model.predict([test_user, test_item, test_item_feat])
         # pred_out = self.cdl_model.predict([test_user, test_item, test_item_feat])
         return np.sqrt(np.mean(np.square(test_label.flatten() - pred_out[0].flatten())))
+
 
 """
         def lossLayer(args):
