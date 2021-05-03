@@ -105,11 +105,14 @@ class CollaborativeDeepLearning:
         train_user = rating_mat[["reviewer_id"]]
         asins = rating_mat["asin"].tolist()
         train_item = rating_mat[["item_id"]]
-        train_item_feat = [np.array(self.item_dict.get(asins[x])) for x in range(len(asins))]
-        train_item_feat = [[0 for _ in range(4096)] if x is None else x for x in train_item_feat]
-        train_item_feat = np.array([np.array([0 for _ in range(4096)]) for _ in range(len(asins))])
-        train_label = np.array(rating_mat["rating"].values.tolist())
-        return train_user, train_item, train_item_feat, train_label
+        train_item_feat = []
+        for x in range(len(asins)):
+            one_feat = self.item_dict.get(asins[x])
+            if one_feat is None:
+                one_feat = [0 for _ in range(4096)]
+            train_item_feat.append(np.array(one_feat))
+        train_label = np.array(rating_mat["rating"].values.tolist())/5
+        return train_user, train_item, np.array(train_item_feat), train_label
 
     def build(self, train_mat, test_mat, lamda_u=0.1, lamda_v=0.1, lamda_n=0.1, lr=0.001, batch_size=64, epochs=10):
         # rating prediction
@@ -151,31 +154,8 @@ class CollaborativeDeepLearning:
         return np.sqrt(np.mean(np.square(test_label.flatten() - pred_out[0].flatten())))
 
 
-"""
-        def lossLayer(args):
-            Vj, Thetaj = args
-            return 0.5 * K.mean(K.square(Vj - Thetaj), axis=1)
-
-
-        class lossLayer(Layer):
-            def __init__(self, **kwargs):
-                super(lossLayer, self).__init__(**kwargs)
-                #self.kernel_regularizer = l2(lamda_v)
-            def call(self, inputs):
-                Vj, Thetaj = inputs
-                return 0.5 * K.mean(K.square(Vj - Thetaj), axis=1)
-            def compute_output_shape(self, input_shape):
-                return (None, 1)
-
-        def fe_loss(y_true, y_pred):
-            return y_pred
-        fe_regLayer = lossLayer()([encoded, item_EmbeddingLayer])
-
-        my_RMSprop = optimizers.RMSprop(lr=lr)
-        self.cdl_model = Model(inputs=[user_InputLayer, item_InputLayer, itemfeat_InputLayer], outputs=[dotLayer, decoded, fe_regLayer])
-        self.cdl_model.compile(optimizer='rmsprop', loss=['mse', 'mse', fe_loss], loss_weights=[1, lamda_n, lamda_v])
-        train_user, train_item, train_item_feat, train_label = self.matrix2input(train_mat)
+    def get_sample_labels_and_preds(self, test_mat):
         test_user, test_item, test_item_feat, test_label = self.matrix2input(test_mat)
-        model_history = self.cdl_model.fit([train_user, train_item, train_item_feat], [train_label, train_item_feat, train_label], epochs=epochs, batch_size=batch_size, validation_data=([test_user, test_item, test_item_feat], [test_label, test_item_feat, test_label]))
-        return model_history
-"""
+        pred_out = self.cdl_model.predict([test_user, test_item, test_item_feat])
+        # pred_out = self.cdl_model.predict([test_user, test_item, test_item_feat])
+        return test_label.flatten(), pred_out[0].flatten()
