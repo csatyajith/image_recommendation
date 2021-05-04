@@ -1,0 +1,8 @@
+pandas
+mxnet
+opencv-python
+sagemaker
+numpy
+matplotlib
+keras
+tensorflow
