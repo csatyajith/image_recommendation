@@ -1,4 +1,4 @@
-# image_recommendation
+# Image Recommendation using Collaborative Deep Learning
 Image based recommendation: Massive Data Mining project
 
 For this project, we built a Collaborative Deep Learning model to give recommendations based on Images. 
